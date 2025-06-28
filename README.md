@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 🎧 Professional SRT Subtitle Generator
 
 A professional-grade tool for generating synchronized SRT subtitle files from text transcripts and audio/video files. This tool implements industry-standard captioning guidelines and provides a user-friendly web interface.
@@ -183,3 +184,6 @@ If you encounter any issues or have questions:
 ---
 
 **Made with ❤️ for content creators and accessibility advocates**
+=======
+# aeneas_aligner-main
+>>>>>>> origin/main
