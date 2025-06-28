@@ -1,0 +1,18 @@
+# Core dependencies
+gradio>=4.0.0
+nltk>=3.8
+
+# Audio processing
+ffmpeg-python>=0.2.0
+
+# Text processing
+pdfminer.six>=20221105
+python-docx>=0.8.11
+
+# Optional: For enhanced functionality
+# aeneas>=1.7.3.0  # Uncomment for real forced alignment (requires system dependencies)
+
+# Development dependencies (optional)
+# pytest>=7.0.0
+# black>=22.0.0
+# flake8>=5.0.0
