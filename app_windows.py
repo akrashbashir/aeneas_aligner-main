@@ -40,6 +40,13 @@ except ImportError:
     DOCX_AVAILABLE = False
     docx = None
 
+try:
+    import webvtt
+    WEBVTT_AVAILABLE = True
+except ImportError:
+    WEBVTT_AVAILABLE = False
+    webvtt = None
+
 def format_srt_time(seconds):
     """Format seconds as SRT time: HH:MM:SS,mmm"""
     hours = int(seconds // 3600)
@@ -354,73 +361,75 @@ def combine_text_inputs(text_file_upload=None, text_input_type=None):
     
     return None, "No text provided. Please upload a file or type text."
 
-def professional_align_text_with_audio(audio_file, text_file=None, wpm=165, text_input=None):
+def generate_vtt_content(srt_entries):
+    """
+    Generate VTT content from SRT entries using webvtt-py.
+    """
+    if not WEBVTT_AVAILABLE or webvtt is None:
+        return None, "webvtt-py not installed. Please run: pip install webvtt-py"
+    vtt = webvtt.WebVTT()
+    for idx, start_time, end_time, subtitle_block in srt_entries:
+        # Convert SRT time to VTT time (replace ',' with '.')
+        start = format_srt_time(start_time).replace(',', '.')
+        end = format_srt_time(end_time).replace(',', '.')
+        text = '\n'.join(subtitle_block)
+        if hasattr(webvtt, 'Caption'):
+            vtt.captions.append(webvtt.Caption(start, end, text))
+        else:
+            return None, "webvtt-py is installed but missing Caption class. Please check your installation."
+    return vtt, None
+
+def professional_align_text_with_audio(audio_file, text_file=None, wpm=165, text_input=None, export_vtt=False):
     """
     Professional text-audio alignment using industry-standard guidelines.
-    
-    Implements all professional captioning standards:
-    - Caption duration: 1.5 to 6 seconds
-    - Max 42 characters per line, max 2 lines per subtitle
-    - Reading speed: 150-180 WPM
-    - Proper audio synchronization
+    Now supports VTT export if export_vtt=True.
     """
     temp_srt_path = None
+    temp_vtt_path = None
     temp_wav_path = None
     try:
         if not audio_file or not hasattr(audio_file, 'name'):
-            return "❌ No valid audio file was uploaded. Please upload a valid audio file.", None
-        
+            return "❌ No valid audio file was uploaded. Please upload a valid audio file.", None, None
         text, error = combine_text_inputs(text_file, text_input)
         if not text or (isinstance(text, str) and text.startswith("Error")):
-            return f"❌ Could not extract text: {error}", None
-        
-        # Always convert audio to WAV for processing
+            return f"❌ Could not extract text: {error}", None, None
         temp_wav_path, error = convert_audio_to_wav(audio_file)
         if error:
-            return f"❌ Audio conversion error: {error}", None
-        
+            return f"❌ Audio conversion error: {error}", None, None
         audio_path = temp_wav_path
         audio_duration, _ = get_audio_duration(audio_path)
-        
-        # Step 1: Split text into sentences using NLTK
         sentences = split_text_into_sentences(text)
         if not sentences:
-            return "❌ No sentences found in the text.", None
-        
-        # Step 3: Synchronize with audio duration
+            return "❌ No sentences found in the text.", None, None
         srt_entries = synchronize_with_audio(sentences, audio_duration, wpm)
-        
-        # Step 5: Generate SRT content
         srt_content = generate_srt_content(srt_entries)
-        
-        # Create temporary SRT file for download
         temp_srt_fd, temp_srt_path = tempfile.mkstemp(suffix=".srt", text=True)
         with os.fdopen(temp_srt_fd, "w", encoding="utf-8") as f:
             f.write(srt_content)
-        
-        # Create summary
+        temp_vtt_path = None
+        if export_vtt:
+            vtt_obj, vtt_error = generate_vtt_content(srt_entries)
+            if vtt_obj:
+                temp_vtt_fd, temp_vtt_path = tempfile.mkstemp(suffix=".vtt", text=True)
+                vtt_obj.save(temp_vtt_path)
+            else:
+                temp_vtt_path = None
         subtitle_count = len(srt_entries)
         summary = f"""✅ Professional SRT Alignment Complete!
-
-📊 Statistics:
+\n📊 Statistics:
 • Subtitle entries: {subtitle_count}
 • Words per minute: {wpm}
 • Audio duration: {audio_duration:.2f}s
-
-🎯 Professional Guidelines Applied:
+\n🎯 Professional Guidelines Applied:
 • Caption duration: 1.5-6 seconds
 • Max 42 characters per line
 • Max 2 lines per subtitle
 • Reading speed: {wpm} WPM
 • Audio synchronization: ✅
-
-📝 Generated SRT:
-{srt_content}"""
-        
-        return summary, temp_srt_path
-        
+\n📝 Generated SRT:\n{srt_content}"""
+        return summary, temp_srt_path, temp_vtt_path
     except Exception as e:
-        return f"❌ ERROR: {str(e)}", None
+        return f"❌ ERROR: {str(e)}", None, None
     finally:
         if temp_wav_path and os.path.exists(temp_wav_path):
             try:
@@ -542,7 +551,7 @@ else:
     # Gradio Interface
     with gr.Blocks(title="🎧 Professional Audio-Text Aligner") as interface:
         gr.Markdown("# 🎧 Professional Audio-Text Aligner")
-        gr.Markdown("Upload audio + text (file or type) to generate professional SRT subtitles.")
+        gr.Markdown("Upload audio + text (file or type) to generate professional SRT/VTT subtitles.")
         gr.Markdown("**Format:** Exactly 4 words per line, 2 lines per subtitle, 1.5-6s duration")
         
         with gr.Row():
@@ -587,6 +596,10 @@ else:
                     label="📖 Words Per Minute (WPM)",
                     info="Reading speed for timing calculation (150-180 WPM)"
                 )
+                vtt_checkbox = gr.Checkbox(
+                    label="Export VTT (WebVTT) file as well as SRT",
+                    value=False
+                )
                 
                 with gr.Row():
                     professional_btn = gr.Button("🎯 Professional Alignment", variant="primary")
@@ -595,23 +608,24 @@ else:
             
             with gr.Column():
                 output = gr.Textbox(label="📄 Alignment Results", lines=20, max_lines=30)
-                download = gr.File(label="⬇️ Download SRT", interactive=False)
+                download_srt = gr.File(label="⬇️ Download SRT", interactive=False)
+                download_vtt = gr.File(label="⬇️ Download VTT", interactive=False)
         
         # Event handlers
         professional_btn.click(
             fn=professional_align_text_with_audio,
-            inputs=[audio_input, text_file_input, wpm_slider, text_input_type_tab],
-            outputs=[output, download]
+            inputs=[audio_input, text_file_input, wpm_slider, text_input_type_tab, vtt_checkbox],
+            outputs=[output, download_srt, download_vtt]
         )
         smart_btn.click(
             fn=smart_align_text_with_audio,
             inputs=[audio_input, text_file_input, text_input_type_tab],
-            outputs=[output, download]
+            outputs=[output, download_srt]
         )
         dummy_btn.click(
             fn=dummy_align_text_with_audio,
             inputs=[audio_input, text_file_input, text_input_type_tab],
-            outputs=[output, download]
+            outputs=[output, download_srt]
         )
         
         gr.Markdown("""
@@ -621,40 +635,7 @@ else:
         - **📖 Reading Speed**: 150-180 words per minute (adjustable)
         - **🎯 Audio Sync**: Proper synchronization with audio duration
         - **🧠 Smart Splitting**: NLTK-based sentence tokenization
-        
-        ### Example Output Format:
-        ```
-        1
-        00:00:00,000 --> 00:00:02,500
-        Hello world! This is
-        a test of the professional
-        
-        2
-        00:00:02,500 --> 00:00:05,000
-        SRT generator. It should
-        create subtitles following
-        
-        3
-        00:00:05,000 --> 00:00:07,500
-        all the guidelines. Each
-        subtitle should be between
-        ```
-        
-        ### How it works:
-        - **🎯 Professional Alignment**: Industry-standard SRT generation with 4-words-per-line format
-        - **🚀 Smart Alignment**: Original timing estimation method
-        - **🎭 Dummy Alignment**: Simple demonstration with evenly spaced timings
-        
-        ### Input Options:
-        - **📁 Upload Text File**: Support for TXT, PDF, DOCX files
-        - **✏️ Type Text**: Direct text input for quick testing
-        
-        ### Supported Formats:
-        - **Audio**: MP3, WAV, M4A, FLAC, MP4, OGG, AAC, and more (via FFmpeg)
-        - **Text**: TXT, PDF, DOCX, or direct typing
-        
-        ### For real forced alignment:
-        Consider using online services like AssemblyAI, Rev AI, or similar APIs.
+        - **🌐 VTT Export**: Download WebVTT as well as SRT (if checked)
         """)
     
     if __name__ == "__main__":

@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # 🎧 Professional SRT Subtitle Generator
 
 A professional-grade tool for generating synchronized SRT subtitle files from text transcripts and audio/video files. This tool implements industry-standard captioning guidelines and provides a user-friendly web interface.
@@ -13,6 +12,12 @@ A professional-grade tool for generating synchronized SRT subtitle files from te
 - **🌐 Web Interface**: User-friendly Gradio-based web application
 - **🧠 NLTK Integration**: Professional sentence tokenization
 
+## 🌐 WebVTT (VTT) Export
+
+- The application now supports exporting subtitles in both SRT and WebVTT (VTT) formats.
+- To enable VTT export, check the "Export VTT (WebVTT) file as well as SRT" option in the web interface before generating subtitles.
+- The VTT file will be available for download alongside the SRT file if the `webvtt-py` library is installed.
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -24,13 +29,17 @@ A professional-grade tool for generating synchronized SRT subtitle files from te
 
 1. **Clone the repository**
    ```bash
-   git clone <your-repo-url>
-   cd srt-subtitle-generator
+   git clone https://github.com/akrashbashir/aeneas_aligner-main.git
+   cd aeneas_aligner-main
    ```
 
 2. **Install dependencies**
    ```bash
    pip install -r requirements.txt
+   ```
+   Ensure you have `webvtt-py` installed for VTT export:
+   ```bash
+   pip install webvtt-py
    ```
 
 3. **Install FFmpeg** (if not already installed)
@@ -184,6 +193,10 @@ If you encounter any issues or have questions:
 ---
 
 **Made with ❤️ for content creators and accessibility advocates**
-=======
-# aeneas_aligner-main
->>>>>>> origin/main
+
+## ❓ Troubleshooting VTT Download
+
+- If the VTT download button is present but does not work:
+  1. Ensure `webvtt-py` is installed (`pip install webvtt-py`)
+  2. Restart the application after installing new dependencies
+  3. Check the output area for any error messages
